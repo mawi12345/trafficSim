@@ -56,7 +56,7 @@ $(function(){
 		},
 		
 		getStepPosition: function(step) {
-			if (step < 0 || step > this.getSteps() || step != Math.floor(step)) throw new Error('step '+step+' is not valid');
+			if (step < 0 || step > this.getSteps()) throw new Error('step '+step+' is not valid');
 			var p = {x: 0, y:0};
 			if (step == 0) {
 				p = {
@@ -165,11 +165,11 @@ $(function(){
 		
 		_position: 0,
 		
-		maxSpeed: 10,
+		maxSpeed: 5,
 				
-		dawdle: 0.3,
+		dawdle: 0.1,
 		
-		acceleration: 0.1,
+		acceleration: 0.05,
 		
 		step: 20,
 				
@@ -207,7 +207,7 @@ $(function(){
 			var possibilities = lastVertex.get('startingEdges');
 			var r = possibilities.at(_.random(possibilities.length-1));
 			window.p = possibilities;
-			console.log('choosing', r, possibilities);
+			//console.log('choosing', r, possibilities);
 			return r;
 		},
 		
@@ -254,10 +254,11 @@ $(function(){
 		 * postion update!!! UND car von edge entferen und hinzufügen
 		 */
 		move: function() {
+			this.trigger('move', this._path.slice(), this._position, this.getSpeed());
 			//console.log('updatePosition', this);
 			this._position += this.getSpeed();
 			while (this._position >= this._path[0].getSteps()) {
-				console.log('removing first');
+				//console.log('removing first');
 				var edge = this._path[0];
 				edge.get('cars').remove(this);
 				this._position -= edge.getSteps();
@@ -295,8 +296,8 @@ $(function(){
         {id:0, v1:0, v2:1},
         {id:1, v1:1, v2:2},
         {id:2, v1:2, v2:3},
-        {id:3, v1:3, v2:0},
-        {id:4, v1:1, v2:3}
+        {id:3, v1:3, v2:0}
+        //{id:4, v1:1, v2:3}
 	]);
 	
 	window.cars = new CarCollection([
@@ -421,13 +422,102 @@ $(function(){
 		
 	});
 	
+	var CarAnimationView = ns.CarAnimationView = Backbone.View.extend({
+		
+		_animations: [],
+		
+		initialize: function() {
+			
+			this._animations = [];
+			
+			this.shape = new Kinetic.Group({
+				x: this.model.getX(),
+				y: this.model.getY()
+			});
+			
+			this.circle = new Kinetic.Circle({
+				radius: 7,
+				fill: '#DDDDDD'
+			});
+			
+			this.text = new Kinetic.Text({
+				x: -4,
+				y: -4,
+		        text: this.model.getId(),
+		        fontSize: 12,
+		        fontFamily: 'Calibri',
+		        fill: 'white'
+			});
+			
+			this.speedText = new Kinetic.Text({
+				x: 5,
+				y: 5,
+		        text: this.model.getSpeed(),
+		        fontSize: 12,
+		        fontFamily: 'Calibri',
+		        fill: 'red'
+			});
+			
+			this.shape.add(this.circle);
+			this.shape.add(this.text);
+			this.shape.add(this.speedText);
+			
+			this.listenTo(this.model, 'move', this.move);
+		},
+		
+		move: function(path, position, speed) {
+			//console.log('move', path, position, speed);
+			this._animations.push({path: path, position: position, speed: speed, progress: 0});
+		},
+		
+		getShape: function() {
+			return this.shape;
+		},
+		
+		renderAnimation: function(animation) {
+			var position = ((animation.speed / 100) * animation.progress) + animation.position;
+			//console.log('render ani', animation, position);
+			
+			// get path for position
+			var i = 0;
+			while (position > animation.path[i].getSteps()) {
+				position -= animation.path[i].getSteps();
+				i++;
+			}
+			// get coordinates an edge for position (corected)
+			var vect = animation.path[i].getStepPosition(position);
+			this.shape.setX(vect.x);
+			this.shape.setY(vect.y);
+			this.speedText.setText(animation.speed);
+		},
+		
+		render: function(progress) {
+			if (!this._animations.length) return;
+			
+			//while schleife
+			if (this._animations[0].progress + progress > 100) throw new Error('multi animation progress not supported');
+			
+			this._animations[0].progress += progress;
+			
+			this.renderAnimation(this._animations[0]);
+			
+			if (this._animations[0].progress >= 100) this._animations.shift();
+			
+			this.trigger('dirty');
+		}
+		
+	});
+	
 	var AppView = ns.AppView = Backbone.View.extend({
+		
+		cars: [],
 		
 		events: {
 		  "click #help": "openHelp"
 		},
 		
-		initialize: function() {			
+		initialize: function() {
+			this.cars = [];
 			this.stage = new Kinetic.Stage({
 				container: 'container'
 		    });
@@ -508,12 +598,22 @@ $(function(){
 		dirtyCars: false,
 		
 		addCar: function(car) {
+			/*
 			var carView = new CarView({model: car});
 			this.listenTo(carView, 'dirty', function(){ this.dirtyCars = true;});
 			this.carLayer.add(carView.getShape());
+			*/
+			
+			var carAnimationView = new CarAnimationView({model: car});
+			this.listenTo(carAnimationView, 'dirty', function(){ this.dirtyCars = true;});
+			this.carLayer.add(carAnimationView.getShape());
+			this.cars.push(carAnimationView);
 		},
 		
-		render: function() {
+		render: function(progess) {
+			_.each(this.cars, function(car){
+				car.render(progess);
+			});
 			if (this.dirtyCars) this.carLayer.draw();
 			return this;
 		},
@@ -530,7 +630,8 @@ $(function(){
 	
 	(function animloop(){
 		requestAnimationFrame(animloop);
-		app.render();
+		app.render(5);
+		//setTimeout(animloop, 1000);
 	})();
 	
 	var gui = require('nw.gui');
@@ -550,7 +651,7 @@ $(function(){
 		window.cars.each(function(car){
 			car.move();
 		});
-		setTimeout(calculate, 1000);
+		setTimeout(calculate, 90);
 	})();
 	
 });
