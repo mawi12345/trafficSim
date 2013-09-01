@@ -23,6 +23,8 @@ $(function(){
 	
 	var Edge = ns.Edge = Backbone.RelationalModel.extend({
 		
+		targetStepLength: 20,
+		
 		relations: [
     		{
     			type: Backbone.HasOne,
@@ -46,11 +48,11 @@ $(function(){
 		],
 		
 		getSteps: function() {
-			return Math.round(this.getLength() / this.getStepLength());
+			return Math.round(this.getLength() / this.targetStepLength);
 		},
 		
 		getStepLength: function() {
-			return this.get('sl');
+			return this.getLength() / this.getSteps();
 		},
 		
 		getStepPosition: function(step) {
@@ -68,8 +70,8 @@ $(function(){
 				};
 			} else {
 				p = {
-					x: this.get('v1').getX() + ((this.get('v2').getX()-this.get('v1').getX())*(step/this.getStepLength())),
-					y: this.get('v1').getY() + ((this.get('v2').getY()-this.get('v1').getY())*(step/this.getStepLength()))
+					x: this.get('v1').getX() + ((this.get('v2').getX()-this.get('v1').getX())*(step/this.getSteps())),
+					y: this.get('v1').getY() + ((this.get('v2').getY()-this.get('v1').getY())*(step/this.getSteps()))
 				};
 			}
 			//console.log('position ', p, step);
@@ -221,7 +223,7 @@ $(function(){
 				console.log('warning getMaxWay with speed 0');
 				return 0;
 			}
-			while ((this.getPathLength()-this._position) < this.getSpeed()) {
+			while ((this.getPathLength()-this._position) <= this.getSpeed()) {
 				this._path.push(this.getNextEdge());
 			}
 			var offset = -1;
@@ -230,7 +232,6 @@ $(function(){
 			for (var i=0; i<this._path.length; i++) {
 				var edge = this._path[i];
 				var cars = edge.get('cars');
-				//console.log(edge, edge.get('cars'));
 
 				cars.each(function(car){
 					if (car.cid == this.cid) return;
@@ -240,7 +241,7 @@ $(function(){
 				}, this);
 				
 				if (next < this.getSpeed()) return next;
-				offset += edge.getStepLength() - posOnEdge;
+				offset += edge.getSteps() - posOnEdge;
 				posOnEdge = 0;
 				if (offset >= this.getSpeed()) return this.getSpeed();
 			}
@@ -255,7 +256,7 @@ $(function(){
 		move: function() {
 			//console.log('updatePosition', this);
 			this._position += this.getSpeed();
-			while (this._position > this._path[0].getSteps()) {
+			while (this._position >= this._path[0].getSteps()) {
 				console.log('removing first');
 				var edge = this._path[0];
 				edge.get('cars').remove(this);
@@ -291,11 +292,11 @@ $(function(){
 	]);
 	
 	window.edges = new EdgeCollection([
-        {id:0, v1:0, v2:1, sl:20},
-        {id:1, v1:1, v2:2, sl:20},
-        {id:2, v1:2, v2:3, sl:20},
-        {id:3, v1:3, v2:0, sl:20},
-        {id:4, v1:1, v2:3, sl:20}
+        {id:0, v1:0, v2:1},
+        {id:1, v1:1, v2:2},
+        {id:2, v1:2, v2:3},
+        {id:3, v1:3, v2:0},
+        {id:4, v1:1, v2:3}
 	]);
 	
 	window.cars = new CarCollection([
@@ -383,8 +384,8 @@ $(function(){
 			});
 			
 			this.text = new Kinetic.Text({
-				x: -5,
-				y: -5,
+				x: -4,
+				y: -4,
 		        text: this.model.getId(),
 		        fontSize: 12,
 		        fontFamily: 'Calibri',
