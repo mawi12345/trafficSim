@@ -1,6 +1,10 @@
 $(function(){
 	
-	var Vertex = Backbone.RelationalModel.extend({
+	var ns = {};
+	
+	Backbone.Relational.store.addModelScope(ns);
+	
+	var Vertex = ns.Vertex = Backbone.RelationalModel.extend({
 		
 		getX: function() {
 			return this.get('x');
@@ -11,20 +15,20 @@ $(function(){
 		}
 	});
 	
-	var VertexCollection = Backbone.Collection.extend({
+	var VertexCollection = ns.VertexCollection = Backbone.Collection.extend({
 		  		
 		model: Vertex
 		
 	});
 	
-	var Edge = Backbone.RelationalModel.extend({
+	var Edge = ns.Edge = Backbone.RelationalModel.extend({
 		
 		relations: [
     		{
     			type: Backbone.HasOne,
     			key: 'v1',
-    			relatedModel: Vertex,
-    			collectionType: VertexCollection,
+    			relatedModel: 'Vertex',
+    			collectionType: 'VertexCollection',
     			includeInJSON: 'id',
     			reverseRelation: {
     				key: 'startingEdges'
@@ -41,7 +45,37 @@ $(function(){
     		}
 		],
 		
+		getSteps: function() {
+			return Math.round(this.getLength() / this.getStepLength());
+		},
 		
+		getStepLength: function() {
+			return this.get('sl');
+		},
+		
+		getStepPosition: function(step) {
+			if (step < 0 || step > this.getSteps() || step != Math.floor(step)) throw new Error('step '+step+' is not valid');
+			var p = {x: 0, y:0};
+			if (step == 0) {
+				p = {
+					x: this.get('v1').getX(),
+					y: this.get('v1').getY()
+				};
+			} else if (step == this.getStepLength()) {
+				p = {
+					x: this.get('v2').getX(),
+					y: this.get('v2').getY()
+				};
+			} else {
+				p = {
+					x: this.get('v1').getX() + ((this.get('v2').getX()-this.get('v1').getX())*(step/this.getStepLength())),
+					y: this.get('v1').getY() + ((this.get('v2').getY()-this.get('v1').getY())*(step/this.getStepLength()))
+				};
+			}
+			//console.log('position ', p, step);
+			return p;
+			
+		},
 		
 		getLength: function() {
 			var x = Math.abs(this.get('v1').getX()-this.get('v2').getX());
@@ -51,13 +85,18 @@ $(function(){
 	
 	});
 	
-	var EdgeCollection = Backbone.Collection.extend({
+	var EdgeCollection = ns.EdgeCollection = Backbone.Collection.extend({
   		
 		model: Edge
 		
 	});
 	
-	var Car = Backbone.RelationalModel.extend({
+	var Car = ns.Car = Backbone.RelationalModel.extend({
+		
+		subModelTypes: {
+			'dummy': 'DummyCar',
+			'simple': 'SimpleCar'
+		},
 		
 		relations: [
     		{
@@ -72,6 +111,10 @@ $(function(){
     		}
 		],
 		
+		getId: function() {
+			return this.get('id');
+		},
+		
 		getX: function() {
 			return this.get('x');
 		},
@@ -80,22 +123,53 @@ $(function(){
 			return this.get('y');
 		},
 		
-		calculte: function() {
+		calculate: function() {
 			console.log('overwrite this method!');
+		},
+		
+		move: function() {
+			console.log('overwrite this method!');
+		},
+		
+		getPosition: function() {
+			return this.get('p');
+		},
+		
+		getSpeed: function() {
+			return this.get('s');
+		},
+		
+		setSpeed: function(speed) {
+			if (speed < 0) speed = 0;
+			this.set({'s': speed});
 		}
+		
 	});
 	
-	var SimpleCar = Car.extend({
+	var DummyCar = ns.DummyCar = Car.extend({
+		
+		calculate: function() {},
+		
+		move: function() {
+			var edge = this.get('edge');
+			this.set(edge.getStepPosition(this.get('p')));
+		}
+		
+	});
+	
+	var SimpleCar = ns.SimpleCar = Car.extend({
 		
 		_path: [],
 		
 		_position: 0,
 		
 		maxSpeed: 10,
-		
-		speed: 0,
-		
+				
 		dawdle: 0.3,
+		
+		acceleration: 0.1,
+		
+		step: 20,
 				
 		initialize: function() {
 			this._path = [];
@@ -110,9 +184,17 @@ $(function(){
 		getPathLength: function() {
 			var length = 0;
 			_.each(this._path, function(edge){
-				length += edge.getLength();
+				length += edge.getSteps();
 			});
 			return length;
+		},
+		
+		accelerate: function() {
+			this.setSpeed(this.getSpeed() + this.acceleration*this.maxSpeed);
+		},
+		
+		brake: function() {
+			this.setSpeed(this.getSpeed() - this.acceleration*this.maxSpeed);
 		},
 		
 		/**
@@ -135,15 +217,16 @@ $(function(){
 		 * @returns {Number}
 		 */
 		getMaxWay: function() {
-			if (this.speed == 0) {
+			if (this.getSpeed() == 0) {
 				console.log('warning getMaxWay with speed 0');
 				return 0;
 			}
-			while ((this.getPathLength()-this._position) < this.speed) {
+			while ((this.getPathLength()-this._position) < this.getSpeed()) {
 				this._path.push(this.getNextEdge());
 			}
-			var offset = 0;
-			var next = this.speed;
+			var offset = -1;
+			var posOnEdge = this.getPosition();
+			var next = this.getSpeed();
 			for (var i=0; i<this._path.length; i++) {
 				var edge = this._path[i];
 				var cars = edge.get('cars');
@@ -151,14 +234,15 @@ $(function(){
 
 				cars.each(function(car){
 					if (car.cid == this.cid) return;
-					var distance = offset + car.getPosition() - this.getPosition();
-					if (distance <= 0) return; // car is not in front
+					var distance = car.getPosition() - posOnEdge + offset;
+					if (distance < 0) return; // car is not in front
 					if (distance < next) next = distance;
 				}, this);
 				
-				if (next < this.speed) return next;
-				offset += edge.getLength();
-				if (offset >= this.speed) return this.speed;
+				if (next < this.getSpeed()) return next;
+				offset += edge.getStepLength() - posOnEdge;
+				posOnEdge = 0;
+				if (offset >= this.getSpeed()) return this.getSpeed();
 			}
 			return this.maxSpeed;
 		},
@@ -168,45 +252,34 @@ $(function(){
 		 * entferne das erste glid der kette wenn die position auf dem 2ten ist.
 		 * postion update!!! UND car von edge entferen und hinzufügen
 		 */
-		updatePosition: function() {
+		move: function() {
 			//console.log('updatePosition', this);
-			this._position += this.speed;
-			while (this._position > this._path[0].getLength()) {
+			this._position += this.getSpeed();
+			while (this._position > this._path[0].getSteps()) {
 				console.log('removing first');
 				var edge = this._path[0];
 				edge.get('cars').remove(this);
-				this._position -= edge.getLength();
+				this._position -= edge.getSteps();
 				this._path.shift();
 				this._path[0].get('cars').add(this);
 			}
 			var edge = this._path[0];
-			var p = this._position / edge.getLength();
-			var x = edge.get('v1').getX()-edge.get('v2').getX();
-			var y = edge.get('v1').getY()-edge.get('v2').getY();
-			var newPos = {
-				x: edge.get('v1').getX()-(x*p),
-				y: edge.get('v1').getY()-(y*p),
-			};
-			//console.log('new pos', newPos);
-			this.set(newPos);
+			this.set(edge.getStepPosition(this._position));
 			
 		},
 		
 		calculate: function() {
-			if (this.speed < this.maxSpeed) this.speed++;
+			if (this.getSpeed() < this.maxSpeed) this.accelerate();
 			var maxWay = this.getMaxWay();
-			if (this.speed > maxWay) this.speed = maxWay;
-			if (Math.random()-this.dawdle <= 0) this.speed--;
-			if (this.speed < 0) this.speed = 0;
-			this.updatePosition();
-			//console.log(this.speed, maxWay, this._position);
+			if (this.getSpeed() > maxWay) this.setSpeed(maxWay);
+			if (Math.random()-this.dawdle <= 0) this.brake();
 		}
 		
 	});
 	
-	var CarCollection = Backbone.Collection.extend({
+	var CarCollection = ns.CarCollection = Backbone.Collection.extend({
 		  		
-		model: SimpleCar
+		model: Car
 		
 	});
 	
@@ -218,28 +291,30 @@ $(function(){
 	]);
 	
 	window.edges = new EdgeCollection([
-        {id:0, v1:0, v2:1},
-        {id:1, v1:1, v2:2},
-        {id:2, v1:2, v2:3},
-        {id:4, v1:3, v2:0}
+        {id:0, v1:0, v2:1, sl:20},
+        {id:1, v1:1, v2:2, sl:20},
+        {id:2, v1:2, v2:3, sl:20},
+        {id:3, v1:3, v2:0, sl:20},
+        {id:4, v1:1, v2:3, sl:20}
 	]);
 	
 	window.cars = new CarCollection([
-	    {id:0, p:  0, edge: 0},
-	    {id:1, p:100, edge: 0},
-	    {id:2, p:200, edge: 0},
-	    {id:3, p:300, edge: 0},
-	    {id:4, p:  0, edge: 1},
-	    {id:5, p: 50, edge: 1},
-	    {id:6, p:100, edge: 1},
-	    {id:7, p:150, edge: 1},
-	    {id:8, p:200, edge: 1}
+	    {id:0, p:0,  edge: 0, s:0, type: 'simple'},
+	    {id:1, p:5,  edge: 0, s:0, type: 'simple'},
+	    {id:2, p:10, edge: 0, s:0, type: 'simple'},
+	    {id:3, p:15, edge: 0, s:0, type: 'simple'},
+	    {id:4, p:0,  edge: 1, s:0, type: 'simple'},
+	    {id:5, p:5,  edge: 1, s:0, type: 'simple'},
+	    {id:6, p:10, edge: 1, s:0, type: 'simple'},
+	    {id:7, p:15, edge: 1, s:0, type: 'simple'},
+	    {id:8, p:0,  edge: 2, s:0, type: 'simple'}
+	    //{id:9, p:1,  edge: 3, s:0, type: 'dummy'}
    	]);
-	
+		
 	window.e0 = window.edges.get(0);
 	window.v0 = window.vertexs.get(0);
 	
-	var VertexView = Backbone.View.extend({
+	var VertexView = ns.VertexView = Backbone.View.extend({
 		
 		initialize: function() {
 			this.shape = new Kinetic.Circle({
@@ -263,7 +338,7 @@ $(function(){
 		
 	});
 	
-	var EdgeView = Backbone.View.extend({
+	var EdgeView = ns.EdgeView = Backbone.View.extend({
 		
 		initialize: function() {
 			this.shape = new Kinetic.Line({
@@ -293,21 +368,49 @@ $(function(){
 		
 	});
 	
-	var CarView = Backbone.View.extend({
+	var CarView = ns.CarView = Backbone.View.extend({
 		
 		initialize: function() {
-			this.shape = new Kinetic.Circle({
+			
+			this.shape = new Kinetic.Group({
 				x: this.model.getX(),
-				y: this.model.getY(),
+				y: this.model.getY()
+			});
+			
+			this.circle = new Kinetic.Circle({
 				radius: 7,
 				fill: '#'+(Math.random()*0xFFFFFF<<0).toString(16)
 			});
+			
+			this.text = new Kinetic.Text({
+				x: -5,
+				y: -5,
+		        text: this.model.getId(),
+		        fontSize: 12,
+		        fontFamily: 'Calibri',
+		        fill: 'white'
+			});
+			
+			this.speedText = new Kinetic.Text({
+				x: 5,
+				y: 5,
+		        text: this.model.getSpeed(),
+		        fontSize: 12,
+		        fontFamily: 'Calibri',
+		        fill: 'red'
+			});
+			
+			this.shape.add(this.circle);
+			this.shape.add(this.text);
+			this.shape.add(this.speedText);
+			
 			this.listenTo(this.model, 'change', this.update);
 		},
 		
 		update: function() {
 			this.shape.setX(this.model.getX());
 			this.shape.setY(this.model.getY());
+			this.speedText.setText(this.model.getSpeed());
 			this.trigger('dirty');
 		},
 		
@@ -317,7 +420,7 @@ $(function(){
 		
 	});
 	
-	var AppView = Backbone.View.extend({
+	var AppView = ns.AppView = Backbone.View.extend({
 		
 		events: {
 		  "click #help": "openHelp"
@@ -433,11 +536,21 @@ $(function(){
 	gui.Window.get().showDevTools();
 	
 	
+	for (var n=0; n<window.cars.length; n++) {
+		var car = window.cars.get(n);
+		console.log('car'+n, car);
+		window['car'+n] = car;
+	};
+	
 	(function calculate(){
 		window.cars.each(function(car){
 			car.calculate();
 		});
-		setTimeout(calculate, 10);
+		window.cars.each(function(car){
+			car.move();
+		});
+		setTimeout(calculate, 1000);
 	})();
+	
 });
 
