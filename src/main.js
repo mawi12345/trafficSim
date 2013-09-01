@@ -6,6 +6,10 @@ $(function(){
 	
 	var Vertex = ns.Vertex = Backbone.RelationalModel.extend({
 		
+		getId: function() {
+			return this.get('id');
+		},
+		
 		getX: function() {
 			return this.get('x');
 		},
@@ -22,6 +26,10 @@ $(function(){
 	});
 	
 	var Edge = ns.Edge = Backbone.RelationalModel.extend({
+		
+		getId: function() {
+			return this.get('id');
+		},
 		
 		targetStepLength: 20,
 		
@@ -83,6 +91,10 @@ $(function(){
 			var x = Math.abs(this.get('v1').getX()-this.get('v2').getX());
 			var y = Math.abs(this.get('v1').getY()-this.get('v2').getY());
 			return Math.sqrt(Math.pow(x, 2)+Math.pow(y, 2));
+		},
+		
+		getGivePriority: function() {
+			return (!!this.get('gp'));
 		}
 	
 	});
@@ -167,7 +179,7 @@ $(function(){
 		
 		maxSpeed: 5,
 				
-		dawdle: 0.1,
+		dawdle: 0.0,
 		
 		acceleration: 0.05,
 		
@@ -248,6 +260,26 @@ $(function(){
 			return this.maxSpeed;
 		},
 		
+		/*
+		 * return the path id + position 
+		 * 
+		 */
+		simulate: function() {
+			var position = this._position + this.getSpeed();
+			
+			var i = 0;
+			while (position >= this._path[i].getSteps()) {
+				position -= this._path[i].getSteps();
+				i++;
+			}
+			
+			return {
+				car: this,
+				edge: this._path[i],
+				position: position
+			};
+		},
+		
 		/**
 		 * setze x und y anhand der kette und der position
 		 * entferne das erste glid der kette wenn die position auf dem 2ten ist.
@@ -255,7 +287,8 @@ $(function(){
 		 */
 		move: function() {
 			this.trigger('move', this._path.slice(), this._position, this.getSpeed());
-			//console.log('updatePosition', this);
+			this.passGivePriority = false;
+			//console.log('car '+this.getId()+' move');
 			this._position += this.getSpeed();
 			while (this._position >= this._path[0].getSteps()) {
 				//console.log('removing first');
@@ -274,7 +307,23 @@ $(function(){
 			if (this.getSpeed() < this.maxSpeed) this.accelerate();
 			var maxWay = this.getMaxWay();
 			if (this.getSpeed() > maxWay) this.setSpeed(maxWay);
-			if (Math.random()-this.dawdle <= 0) this.brake();
+			if (Math.random()-this.dawdle < 0) this.brake();
+			//console.log('car '+this.getId()+' calculate speed '+this.getSpeed()+ ' position '+this._position);
+		},
+		
+		givePriority: function() {
+			
+			//TODO: hack only works on big edges
+			if (!this._path[0].getGivePriority()) return;
+			
+			/*
+			console.log('car '+this.getId()+' givePriority ' + this._path.length + ' p ' + this._position + ' s ' + this.getSpeed());
+			_.each(this._path, function(edge) {
+				console.log(edge.getId());
+			});
+			*/
+			
+			this.setSpeed(this._path[0].getSteps() - this._position - 1)
 		}
 		
 	});
@@ -296,8 +345,8 @@ $(function(){
         {id:0, v1:0, v2:1},
         {id:1, v1:1, v2:2},
         {id:2, v1:2, v2:3},
-        {id:3, v1:3, v2:0}
-        //{id:4, v1:1, v2:3}
+        {id:3, v1:3, v2:0},
+        {id:4, v1:1, v2:3, gp: true}
 	]);
 	
 	window.cars = new CarCollection([
@@ -312,7 +361,15 @@ $(function(){
 	    {id:8, p:0,  edge: 2, s:0, type: 'simple'}
 	    //{id:9, p:1,  edge: 3, s:0, type: 'dummy'}
    	]);
-		
+   	
+	/*
+	window.cars = new CarCollection([
+ 	    {id:0, p:0,  edge: 2, s:0, type: 'simple'},
+ 	    {id:1, p:8,  edge: 4, s:0, type: 'simple'}
+ 	    //{id:9, p:1,  edge: 3, s:0, type: 'dummy'}
+    ]);
+	*/
+	
 	window.e0 = window.edges.get(0);
 	window.v0 = window.vertexs.get(0);
 	
@@ -501,7 +558,10 @@ $(function(){
 			
 			this.renderAnimation(this._animations[0]);
 			
-			if (this._animations[0].progress >= 100) this._animations.shift();
+			if (this._animations[0].progress >= 100) {
+				this._animations.shift();
+				if (this._animations.length < 2) this.trigger('calc');
+			}
 			
 			this.trigger('dirty');
 		}
@@ -509,6 +569,8 @@ $(function(){
 	});
 	
 	var AppView = ns.AppView = Backbone.View.extend({
+		
+		showCalculation: false,
 		
 		cars: [],
 		
@@ -597,15 +659,19 @@ $(function(){
 		
 		dirtyCars: false,
 		
+		needCalc: false,
+		
 		addCar: function(car) {
-			/*
-			var carView = new CarView({model: car});
-			this.listenTo(carView, 'dirty', function(){ this.dirtyCars = true;});
-			this.carLayer.add(carView.getShape());
-			*/
+			
+			if (this.showCalculation) {
+				var carView = new CarView({model: car});
+				this.listenTo(carView, 'dirty', function(){ this.dirtyCars = true;});
+				this.carLayer.add(carView.getShape());
+			}
 			
 			var carAnimationView = new CarAnimationView({model: car});
 			this.listenTo(carAnimationView, 'dirty', function(){ this.dirtyCars = true;});
+			this.listenTo(carAnimationView, 'calc', function(){ this.needCalc = true;});
 			this.carLayer.add(carAnimationView.getShape());
 			this.cars.push(carAnimationView);
 		},
@@ -615,18 +681,55 @@ $(function(){
 				car.render(progess);
 			});
 			if (this.dirtyCars) this.carLayer.draw();
+			if (this.needCalc) this.calculate();
 			return this;
+		},
+		
+		calculate: function() {
+			
+			this.needCalc = false;
+			
+			var simulations = [];
+			window.cars.each(function(car){
+				car.calculate();
+				simulations.push(car.simulate());
+			});
+			
+			//console.log(simulations);
+			
+			_.each(simulations, function(simulation) {
+				_.each(simulations, function(other) {
+					if (simulation.car.getId() == other.car.getId()) return;
+					if (simulation.edge.getId() == other.edge.getId() &&
+						simulation.position == other.position) {
+						simulation.car.givePriority();
+					}
+				});
+			});
+			
+			window.cars.each(function(car){
+				car.move();
+			});
+			
+			//console.log('calc done');
+			
 		},
 		
 		openHelp: function() {
 			console.log('No help =)');
 			//router.navigate("help", {trigger: true});
 		}
-    
+    	
 	});
 	
 	window.app = new AppView;
+	
 	app.render();
+	
+	app.calculate();
+	app.calculate();
+	
+	
 	
 	(function animloop(){
 		requestAnimationFrame(animloop);
@@ -644,15 +747,33 @@ $(function(){
 		window['car'+n] = car;
 	};
 	
+	/*
 	(function calculate(){
+		var simulations = [];
 		window.cars.each(function(car){
 			car.calculate();
+			simulations.push(car.simulate());
 		});
+		
+		//console.log(simulations);
+		
+		_.each(simulations, function(simulation) {
+			_.each(simulations, function(other) {
+				if (simulation.car.getId() == other.car.getId()) return;
+				if (simulation.edge.getId() == other.edge.getId() &&
+					simulation.position == other.position &&
+					simulation.edge.getGivePriority()) {
+					console.log('GIVE');
+					simulation.car.givePriority();
+				}
+			});
+		});
+		
 		window.cars.each(function(car){
 			car.move();
 		});
-		setTimeout(calculate, 90);
+		setTimeout(calculate, 10);
 	})();
-	
+	*/
 });
 
