@@ -1,3 +1,14 @@
+/**
+
+TODO!!!
+
+revert to pre simulation
+
+first simulate all priority cars and lock passed vertexes
+for non priority cars - then calculate !!!!
+
+ */
+
 $(function(){
 	
 	var ns = {};
