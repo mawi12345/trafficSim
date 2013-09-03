@@ -135,6 +135,8 @@ $(function(){
         		}
     		}
 		],
+				
+		random: 0,
 		
 		getId: function() {
 			return this.get('id');
@@ -148,8 +150,13 @@ $(function(){
 			return this.get('y');
 		},
 		
-		calculate: function() {
+		rendomize: function() {
+			this.random = Math.random();
+		},
+		
+		getGateways: function() {
 			console.log('overwrite this method!');
+			return [];
 		},
 		
 		move: function() {
@@ -167,7 +174,25 @@ $(function(){
 		setSpeed: function(speed) {
 			if (speed < 0) speed = 0;
 			this.set({'s': speed});
+		},
+		
+		initialize: function() {
+			this.resetPriority();
+		},
+		
+		addPriority: function(vertex) {
+			this.priorityVertexIds.push(vertex.getId());
+		},
+		
+		hasPriority: function(vertex) {
+			return _.contains(this.priorityVertexIds, vertex.getId());
+		},
+		
+		resetPriority: function() {
+			this.priorityVertexIds = [];
 		}
+		
+		
 		
 	});
 	
@@ -194,6 +219,8 @@ $(function(){
 		
 		acceleration: 0.05,
 		
+		minDistance: 1,
+		
 		step: 20,
 				
 		initialize: function() {
@@ -214,14 +241,6 @@ $(function(){
 			return length;
 		},
 		
-		accelerate: function() {
-			this.setSpeed(this.getSpeed() + this.acceleration*this.maxSpeed);
-		},
-		
-		brake: function() {
-			this.setSpeed(this.getSpeed() - this.acceleration*this.maxSpeed);
-		},
-		
 		/**
 		 * gib ein edge anhand des letzten punkt in der kette zurück
 		 */
@@ -234,6 +253,12 @@ $(function(){
 			return r;
 		},
 		
+		extendPath: function(steps) {
+			while ((this.getPathLength()-this._position) <= steps) {
+				this._path.push(this.getNextEdge());
+			}
+		},
+		
 		/**
 		 * bilde kette in path bis die kette die länge speed hat
 		 * suche in der kette nach hinternisen und 
@@ -241,54 +266,35 @@ $(function(){
 		 * 
 		 * @returns {Number}
 		 */
-		getMaxWay: function() {
-			if (this.getSpeed() == 0) {
-				console.log('warning getMaxWay with speed 0');
-				return 0;
-			}
-			while ((this.getPathLength()-this._position) <= this.getSpeed()) {
-				this._path.push(this.getNextEdge());
-			}
-			var offset = -1;
+		getMaxWay: function(overwritePriority, speed) {
+			this.extendPath(speed);
+			
+			var offset = -this.minDistance;
 			var posOnEdge = this.getPosition();
-			var next = this.getSpeed();
+			var next = speed;
 			for (var i=0; i<this._path.length; i++) {
 				var edge = this._path[i];
 				var cars = edge.get('cars');
 
 				cars.each(function(car){
 					if (car.cid == this.cid) return;
-					var distance = car.getPosition() - posOnEdge + offset;
+					var distance = car.getPosition() + offset - posOnEdge;
 					if (distance < 0) return; // car is not in front
 					if (distance < next) next = distance;
 				}, this);
 				
-				if (next < this.getSpeed()) return next;
+				if (next < speed) return next;
 				offset += edge.getSteps() - posOnEdge;
+				
+				if (!overwritePriority && !this.hasPriority(edge.get('v2'))) {
+					return offset;
+				}
+				
 				posOnEdge = 0;
-				if (offset >= this.getSpeed()) return this.getSpeed();
-			}
-			return this.maxSpeed;
-		},
-		
-		/*
-		 * return the path id + position 
-		 * 
-		 */
-		simulate: function() {
-			var position = this._position + this.getSpeed();
-			
-			var i = 0;
-			while (position >= this._path[i].getSteps()) {
-				position -= this._path[i].getSteps();
-				i++;
+				if (offset >= speed) return speed;
 			}
 			
-			return {
-				car: this,
-				edge: this._path[i],
-				position: position
-			};
+			return speed;
 		},
 		
 		/**
@@ -297,10 +303,11 @@ $(function(){
 		 * postion update!!! UND car von edge entferen und hinzufügen
 		 */
 		move: function() {
-			this.trigger('move', this._path.slice(), this._position, this.getSpeed());
-			this.passGivePriority = false;
+			var speed = this.getNextSpeed();
+			this.setSpeed(speed);
+			this.trigger('move', this._path.slice(), this._position, speed);
 			//console.log('car '+this.getId()+' move');
-			this._position += this.getSpeed();
+			this._position += speed;
 			while (this._position >= this._path[0].getSteps()) {
 				//console.log('removing first');
 				var edge = this._path[0];
@@ -314,27 +321,39 @@ $(function(){
 			
 		},
 		
-		calculate: function() {
-			if (this.getSpeed() < this.maxSpeed) this.accelerate();
-			var maxWay = this.getMaxWay();
-			if (this.getSpeed() > maxWay) this.setSpeed(maxWay);
-			if (Math.random()-this.dawdle < 0) this.brake();
-			//console.log('car '+this.getId()+' calculate speed '+this.getSpeed()+ ' position '+this._position);
+		getGateways: function() {
+			
+			var vertexs = [];
+			
+			var speed = this.getNextSpeed(true, this.minDistance);
+						
+			var position = this._position + speed;
+			
+			var i = 0;
+			while (position >= this._path[i].getSteps()) {
+				position -= this._path[i].getSteps();
+				vertexs.push(this._path[i]);
+				i++;
+			}
+			
+			return vertexs;
 		},
 		
-		givePriority: function() {
+		getNextSpeed: function(overwritePriority, minSpeed) {
+			var newSpeed = this.getSpeed();
+			if (newSpeed < this.maxSpeed) {
+				newSpeed += this.acceleration*this.maxSpeed;
+			}
 			
-			//TODO: hack only works on big edges
-			if (!this._path[0].getGivePriority()) return;
+			if (minSpeed && minSpeed > newSpeed) newSpeed = minSpeed;
 			
-			/*
-			console.log('car '+this.getId()+' givePriority ' + this._path.length + ' p ' + this._position + ' s ' + this.getSpeed());
-			_.each(this._path, function(edge) {
-				console.log(edge.getId());
-			});
-			*/
-			
-			this.setSpeed(this._path[0].getSteps() - this._position - 1)
+			var maxWay = this.getMaxWay(overwritePriority, newSpeed);
+			if (newSpeed > maxWay) newSpeed = maxWay;
+			if (this.random - this.dawdle < 0) {
+				newSpeed -= this.acceleration*this.maxSpeed;
+			}
+			if (newSpeed < 0) return 0;
+			return newSpeed;
 		}
 		
 	});
@@ -696,33 +715,51 @@ $(function(){
 			return this;
 		},
 		
+		pickPriority: function(requests) {
+			//TODO: first look for cars with "steps left on edge < car.minDistance"
+			//      this car has already won last request but needs more time
+			console.log('random picking');
+			return requests[_.random(requests.length-1)];
+		},
+		
 		calculate: function() {
 			
 			this.needCalc = false;
 			
-			var simulations = [];
+			var lockRequests = [];
+			
 			window.cars.each(function(car){
-				car.calculate();
-				simulations.push(car.simulate());
-			});
-			
-			//console.log(simulations);
-			
-			_.each(simulations, function(simulation) {
-				_.each(simulations, function(other) {
-					if (simulation.car.getId() == other.car.getId()) return;
-					if (simulation.edge.getId() == other.edge.getId() &&
-						simulation.position == other.position) {
-						simulation.car.givePriority();
+				car.resetPriority();
+				car.rendomize();
+				_.each(car.getGateways(), function(edge){ 
+					if (lockRequests[edge.get('v2').getId()]) {
+						lockRequests[edge.get('v2').getId()].push({
+							'car': car,
+							'edge': edge
+						});
+					} else {
+						lockRequests[edge.get('v2').getId()] = [{
+							'edge': edge,
+							'car': car
+						}];
 					}
 				});
 			});
+						
+			_.each(lockRequests, function(requests) {
+				var request;
+				if (requests.length == 1) {
+					request = requests[0];
+				} else {
+					request = this.pickPriority(requests);
+				}
+				request.car.addPriority(request.edge.get('v2'));
+				//console.log('selecting car'+request.car.getId()+' for priority on vetertex'+request.edge.get('v2').getId()+' an gateway edge'+request.edge.getId());
+			}, this);
 			
 			window.cars.each(function(car){
 				car.move();
 			});
-			
-			//console.log('calc done');
 			
 		},
 		
