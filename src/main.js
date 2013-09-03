@@ -104,8 +104,10 @@ $(function(){
 			return Math.sqrt(Math.pow(x, 2)+Math.pow(y, 2));
 		},
 		
-		getGivePriority: function() {
-			return (!!this.get('gp'));
+		getPriority: function() {
+			var priority = this.get('p');
+			if (!priority) return 0;
+			return priority;
 		}
 	
 	});
@@ -392,7 +394,7 @@ $(function(){
         {id:1, v1:1, v2:2},
         {id:2, v1:2, v2:3},
         {id:3, v1:3, v2:0},
-        {id:4, v1:1, v2:3, gp: true}
+        {id:4, v1:1, v2:3, p: -1}
 	]);
 	
 	window.cars = new CarCollection([
@@ -742,8 +744,20 @@ $(function(){
 				}
 			}
 			
+			// find bigest priority edge
+			var priorityRequest = null;
+			for (var i=0; i<requests.length; i++) {
+				var request = requests[i];
+				if (!priorityRequest || priorityRequest.edge.getPriority() < request.edge.getPriority()) {
+					priorityRequest = request;
+				}
+			}
+			return priorityRequest;
+			
+			/*
 			console.log('random picking');
 			return requests[_.random(requests.length-1)];
+			*/
 		},
 		
 		calculate: function() {
