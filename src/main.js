@@ -236,8 +236,11 @@ $(function(){
 		getPathLength: function() {
 			var length = 0;
 			_.each(this._path, function(edge){
+				if (!edge) {
+					console.log('car'+this.getId()+' Error in getPathLength', this._path);
+				}
 				length += edge.getSteps();
-			});
+			}, this);
 			return length;
 		},
 		
@@ -378,6 +381,76 @@ $(function(){
 	});
 	
 	window.vertexs = new VertexCollection([
+           {id:1, x:50, y:50},
+           {id:2, x:300, y:50},
+           {id:3, x:320, y:50},
+           {id:4, x:570, y:50},
+           {id:5, x:50, y:300},
+           {id:6, x:285, y:300},
+           {id:7, x:300, y:285},
+           {id:8, x:320, y:285},
+           {id:9, x:335, y:300},
+           {id:10, x:570, y:300},
+           {id:11, x:50, y:320},
+           {id:12, x:285, y:320},
+           {id:13, x:300, y:335},
+           {id:14, x:320, y:335},
+           {id:15, x:335, y:320},
+           {id:16, x:570, y:320},
+           {id:17, x:50, y:570},
+           {id:18, x:300, y:570},
+           {id:19, x:320, y:570},
+           {id:20, x:570, y:570}
+   	]);
+	
+	window.edges = new EdgeCollection([
+	       {id:1, v1:1, v2:2},
+	       {id:2, v1:3, v2:4},
+	       {id:3, v1:5, v2:1},
+	       {id:4, v1:2, v2:7, p:-1},
+	       {id:5, v1:8, v2:3},
+	       {id:6, v1:4, v2:10},
+	       {id:7, v1:6, v2:5},
+	       {id:8, v1:7, v2:6},
+	       {id:9, v1:8, v2:7},
+	       {id:10, v1:9, v2:8},
+	       {id:11, v1:10, v2:9, p:-1},
+	       {id:12, v1:6, v2:12},
+	       {id:13, v1:15, v2:9},
+	       {id:14, v1:11, v2:12, p:-1},
+	       {id:15, v1:12, v2:13},
+	       {id:16, v1:13, v2:14},
+	       {id:17, v1:14, v2:15},
+	       {id:18, v1:15, v2:16},
+	       {id:19, v1:17, v2:11},
+	       {id:20, v1:13, v2:18},
+	       {id:21, v1:19, v2:14, p:-1},
+	       {id:22, v1:16, v2:20},
+	       {id:23, v1:18, v2:17},
+	       {id:24, v1:20, v2:19}
+	]);
+	
+	window.cars = new CarCollection([
+ 	    {id:1, p:0,  edge: 4, s:0, type: 'simple'},
+	    {id:2, p:5,  edge: 4, s:0, type: 'simple'},
+	    {id:3, p:10, edge: 4, s:0, type: 'simple'},
+	    {id:4, p:15, edge: 4, s:0, type: 'simple'},
+	    {id:5, p:0,  edge: 1, s:0, type: 'simple'},
+	    {id:6, p:5,  edge: 1, s:0, type: 'simple'},
+	    {id:7, p:10, edge: 1, s:0, type: 'simple'},
+	    {id:8, p:15, edge: 1, s:0, type: 'simple'},
+ 	    {id:9, p:0,  edge: 21, s:0, type: 'simple'},
+	    {id:10, p:5,  edge: 21, s:0, type: 'simple'},
+	    {id:11, p:10, edge: 21, s:0, type: 'simple'},
+	    {id:12, p:15, edge: 21, s:0, type: 'simple'},
+	    {id:13, p:0,  edge: 22, s:0, type: 'simple'},
+	    {id:14, p:5,  edge: 22, s:0, type: 'simple'},
+	    {id:15, p:10, edge: 22, s:0, type: 'simple'},
+	    {id:16, p:15, edge: 22, s:0, type: 'simple'},
+	]);
+	
+	/*
+	window.vertexs = new VertexCollection([
         {id:0, x:100, y:100},
         {id:1, x:500, y:100},
         {id:2, x:500, y:500},
@@ -406,7 +479,8 @@ $(function(){
 	    {id:8, p:0,  edge: 2, s:0, type: 'simple'}
 	    //{id:9, p:1,  edge: 3, s:0, type: 'dummy'}
    	]);
-   	
+   	*(
+   	*
 	/*
 	window.cars = new CarCollection([
  	    {id:0, p:0,  edge: 2, s:0, type: 'simple'},
@@ -424,7 +498,7 @@ $(function(){
 			this.shape = new Kinetic.Circle({
 				x: this.model.getX(),
 				y: this.model.getY(),
-				radius: 10,
+				radius: 8,
 				fill: 'black'
 			});
 			this.listenTo(this.model, 'change', this.update);
