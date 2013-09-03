@@ -190,9 +190,12 @@ $(function(){
 		
 		resetPriority: function() {
 			this.priorityVertexIds = [];
+		},
+		
+		getDistance: function(vertex) {
+			console.log('overwrite this method!');
+			return 0;
 		}
-		
-		
 		
 	});
 	
@@ -354,6 +357,19 @@ $(function(){
 			}
 			if (newSpeed < 0) return 0;
 			return newSpeed;
+		},
+		
+		getDistance: function(vertex) {
+			
+			var distance = -this.getPosition();
+			
+			for (var i=0; i<this._path.length; i++) {
+				var edge = this._path[i];
+				distance += edge.getSteps();
+				if (edge.get('v2').getId() == vertex.getId()) return distance;
+			}
+			
+			throw new Error('getDistance vertex'+vertex.getId()+' not in path');
 		}
 		
 	});
@@ -716,8 +732,16 @@ $(function(){
 		},
 		
 		pickPriority: function(requests) {
-			//TODO: first look for cars with "steps left on edge < car.minDistance"
-			//      this car has already won last request but needs more time
+			// first look for cars with "steps left on edge < car.minDistance"
+			// this car has already won last request but needs more time
+			for (var i=0; i<requests.length; i++) {
+				var request = requests[i];
+				if (request.car.getDistance(request.edge.get('v2')) < request.car.minDistance) {
+					console.log('picking last winner');
+					return request;
+				}
+			}
+			
 			console.log('random picking');
 			return requests[_.random(requests.length-1)];
 		},
