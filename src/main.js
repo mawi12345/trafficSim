@@ -1,11 +1,6 @@
 /**
 
-TODO!!!
-
-revert to pre simulation
-
-first simulate all priority cars and lock passed vertexes
-for non priority cars - then calculate !!!!
+TODO: add path finding
 
  */
 
@@ -220,7 +215,7 @@ $(function(){
 		
 		maxSpeed: 5,
 				
-		dawdle: 0.0,
+		dawdle: 0.15,
 		
 		acceleration: 0.05,
 		
@@ -386,7 +381,8 @@ $(function(){
         {id:0, x:100, y:100},
         {id:1, x:500, y:100},
         {id:2, x:500, y:500},
-        {id:3, x:100, y:500}
+        {id:3, x:100, y:500},
+        {id:4, x:120, y:480}
 	]);
 	
 	window.edges = new EdgeCollection([
@@ -394,7 +390,8 @@ $(function(){
         {id:1, v1:1, v2:2},
         {id:2, v1:2, v2:3},
         {id:3, v1:3, v2:0},
-        {id:4, v1:1, v2:3, p: -1}
+        {id:4, v1:1, v2:4},
+        {id:5, v1:4, v2:3, p: -1}
 	]);
 	
 	window.cars = new CarCollection([
@@ -734,13 +731,14 @@ $(function(){
 		},
 		
 		pickPriority: function(requests) {
+			
 			// first look for cars with "steps left on edge < car.minDistance"
 			// this car has already won last request but needs more time
 			for (var i=0; i<requests.length; i++) {
 				var request = requests[i];
 				if (request.car.getDistance(request.edge.get('v2')) < request.car.minDistance) {
-					console.log('picking last winner');
-					return request;
+					//console.log('picking last winner');
+					return [request];
 				}
 			}
 			
@@ -752,7 +750,7 @@ $(function(){
 					priorityRequest = request;
 				}
 			}
-			return priorityRequest;
+			return [priorityRequest];
 			
 			/*
 			console.log('random picking');
@@ -785,13 +783,16 @@ $(function(){
 			});
 						
 			_.each(lockRequests, function(requests) {
-				var request;
-				if (requests.length == 1) {
-					request = requests[0];
+				var winningRequests = [];
+				// if only one request or no collision possible
+				if (requests.length == 1 || requests[0].edge.get('v2').get('endingEdges').length < 2) {
+					winningRequests = requests;
 				} else {
-					request = this.pickPriority(requests);
+					winningRequests = this.pickPriority(requests);
 				}
-				request.car.addPriority(request.edge.get('v2'));
+				_.each(winningRequests, function(request){
+					request.car.addPriority(request.edge.get('v2'));
+				});
 				//console.log('selecting car'+request.car.getId()+' for priority on vetertex'+request.edge.get('v2').getId()+' an gateway edge'+request.edge.getId());
 			}, this);
 			
