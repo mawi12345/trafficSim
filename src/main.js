@@ -278,13 +278,28 @@ $(function(){
 			for (var i=0; i<this._path.length; i++) {
 				var edge = this._path[i];
 				var cars = edge.get('cars');
-
+				
+				// check cars on edge
 				cars.each(function(car){
 					if (car.cid == this.cid) return;
 					var distance = car.getPosition() + offset - posOnEdge;
 					if (distance < 0) return; // car is not in front
 					if (distance < next) next = distance;
 				}, this);
+				
+				//check the cars on starting edges
+				if (posOnEdge + speed >= edge.getSteps()) {
+					edge.get('v2').get('startingEdges').each(function(startingEdge){
+						var carsOnStaringEdge = startingEdge.get('cars');
+						carsOnStaringEdge.each(function(car){
+							if (car.getPosition() < this.minDistance) {
+								var distance = edge.getSteps() - posOnEdge - offset + car.getPosition();
+								if (distance < 0) return; // car is not in front
+								if (distance < next) next = distance;
+							}
+						}, this);
+					}, this);
+				}
 				
 				if (next < speed) return next;
 				offset += edge.getSteps() - posOnEdge;
@@ -326,20 +341,30 @@ $(function(){
 		
 		getGateways: function() {
 			
-			var vertexs = [];
+			var edges = [];
 			
 			var speed = this.getNextSpeed(true, this.minDistance);
 						
 			var position = this._position + speed;
 			
+			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			// TODO: chould not be nessasery getMaxWay should find this car
+			// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+			// check if car could stand still and lock all endinding edges an vertex
+			/*
+			if (this.getNextSpeed(true) == 0 && this._position == 0) {
+				console.log('car'+this.getId()+' special locking state');
+				edges = this._path[0].get('v1').get('endingEdges').toArray();
+			}
+			*/
 			var i = 0;
 			while (position >= this._path[i].getSteps()) {
 				position -= this._path[i].getSteps();
-				vertexs.push(this._path[i]);
+				edges.push(this._path[i]);
 				i++;
 			}
 			
-			return vertexs;
+			return edges;
 		},
 		
 		getNextSpeed: function(overwritePriority, minSpeed) {
@@ -689,7 +714,11 @@ $(function(){
 	
 	var AppView = ns.AppView = Backbone.View.extend({
 		
-		showCalculation: false,
+		showCalculation: true,
+		
+		collisionTest: true,
+		
+		collisionDistance: 0.2,
 		
 		cars: [],
 		
@@ -799,7 +828,25 @@ $(function(){
 			_.each(this.cars, function(car){
 				car.render(progess);
 			});
-			if (this.dirtyCars) this.carLayer.draw();
+			if (this.dirtyCars) {
+				this.carLayer.draw();
+				if (this.collisionTest) {
+					_.each(this.cars, function(car){
+						_.each(this.cars, function(other){
+							if (car.cid == other.cid) return;
+							
+							if (Math.abs(car.shape.getX()-other.shape.getX()) < this.collisionDistance &&
+								Math.abs(car.shape.getY()-other.shape.getY()) < this.collisionDistance) {
+								console.log('car'+car.model.getId()+' animationView', car);
+								console.log('car'+other.model.getId()+' animationView', other);
+								console.log('Animationcollision! car'+car.model.getId()+' with car'+other.model.getId());
+								//throw new Error('Animationcollision! car'+car.model.getId()+' with car'+other.model.getId());
+							}
+							
+						}, this);
+					}, this);
+				}
+			}
 			if (this.needCalc) this.calculate();
 			return this;
 		},
@@ -874,6 +921,23 @@ $(function(){
 				car.move();
 			});
 			
+			if (this.collisionTest) {
+				window.cars.each(function(car){
+					window.cars.each(function(other){
+						if (car.getId() == other.getId()) return;
+						
+						if (Math.abs(car.getX()-other.getX()) < this.collisionDistance &&
+							Math.abs(car.getY()-other.getY()) < this.collisionDistance) {
+							console.log('car'+car.getId(), car);
+							console.log('car'+other.getId(), other);
+							console.log('Collision! car'+car.getId()+' with car'+other.getId());
+							throw new Error('Collision! car'+car.getId()+' with car'+other.getId());
+						}
+						
+					}, this);
+				}, this);
+			}
+			
 		},
 		
 		openHelp: function() {
@@ -893,8 +957,8 @@ $(function(){
 	
 	
 	(function animloop(){
-		requestAnimationFrame(animloop);
 		app.render(5);
+		requestAnimationFrame(animloop);
 		//setTimeout(animloop, 1000);
 	})();
 	
