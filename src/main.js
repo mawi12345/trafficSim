@@ -6,6 +6,9 @@ TODO: add path finding
 
 $(function(){
 	
+	var gui = require('nw.gui');
+	gui.Window.get().showDevTools();
+	
 	var ns = {};
 	
 	Backbone.Relational.store.addModelScope(ns);
@@ -271,8 +274,8 @@ $(function(){
 		 */
 		getMaxWay: function(overwritePriority, speed) {
 			this.extendPath(speed);
-			
-			var offset = -this.minDistance;
+						
+			var distanceToEdge = 0;
 			var posOnEdge = this.getPosition();
 			var next = speed;
 			for (var i=0; i<this._path.length; i++) {
@@ -281,35 +284,44 @@ $(function(){
 				
 				// check cars on edge
 				cars.each(function(car){
-					if (car.cid == this.cid) return;
-					var distance = car.getPosition() + offset - posOnEdge;
-					if (distance < 0) return; // car is not in front
+					if (car.getId() == this.getId()) return;
+					if (posOnEdge > car.getPosition()) return; // car is not in front
+					var distance = distanceToEdge + (car.getPosition() - posOnEdge) - this.minDistance;
+					if (distance < 0) {
+						console.error('car'+this.getId()+' getMaxWay algo error1! distance: ' + distance, distanceToEdge, car.getPosition(), posOnEdge, this.minDistance);
+						throw new Error('car'+this.getId()+' getMaxWay algo error1! distance: ' + distance);
+					}
 					if (distance < next) next = distance;
 				}, this);
 				
 				//check the cars on starting edges
-				if (posOnEdge + speed >= edge.getSteps()) {
+				if ((posOnEdge + speed) >= (distanceToEdge + edge.getSteps())) {
 					edge.get('v2').get('startingEdges').each(function(startingEdge){
 						var carsOnStaringEdge = startingEdge.get('cars');
 						carsOnStaringEdge.each(function(car){
 							if (car.getPosition() < this.minDistance) {
-								var distance = edge.getSteps() - posOnEdge - offset + car.getPosition();
-								if (distance < 0) return; // car is not in front
+								// like an car on the end of the edge
+								var distance = distanceToEdge + (edge.getSteps() - posOnEdge) - this.minDistance;
+								if (distance < 0) {
+									console.error('car'+this.getId()+' getMaxWay algo error2! distance: ' + distance, distanceToEdge, edge.getSteps(), posOnEdge, this.minDistance);
+									throw new Error('car'+this.getId()+' getMaxWay algo error2! distance: ' + distance);  
+								}
 								if (distance < next) next = distance;
 							}
 						}, this);
 					}, this);
 				}
 				
+				distanceToEdge += edge.getSteps() - posOnEdge;
+				posOnEdge = 0;
+				
 				if (next < speed) return next;
-				offset += edge.getSteps() - posOnEdge;
 				
 				if (!overwritePriority && !this.hasPriority(edge.get('v2'))) {
-					return offset;
+					return (distanceToEdge - this.minDistance);
 				}
 				
-				posOnEdge = 0;
-				if (offset >= speed) return speed;
+				if (distanceToEdge >= speed) return speed;
 			}
 			
 			return speed;
@@ -457,21 +469,21 @@ $(function(){
 	
 	window.cars = new CarCollection([
  	    {id:1, p:0,  edge: 4, s:0, type: 'simple'},
-	    {id:2, p:5,  edge: 4, s:0, type: 'simple'},
-	    {id:3, p:10, edge: 4, s:0, type: 'simple'},
-	    {id:4, p:15, edge: 4, s:0, type: 'simple'},
+	    {id:2, p:4,  edge: 4, s:0, type: 'simple'},
+	    {id:3, p:8, edge: 4, s:0, type: 'simple'},
+	    {id:4, p:12, edge: 4, s:0, type: 'simple'},
 	    {id:5, p:0,  edge: 1, s:0, type: 'simple'},
-	    {id:6, p:5,  edge: 1, s:0, type: 'simple'},
-	    {id:7, p:10, edge: 1, s:0, type: 'simple'},
-	    {id:8, p:15, edge: 1, s:0, type: 'simple'},
+	    {id:6, p:4,  edge: 1, s:0, type: 'simple'},
+	    {id:7, p:8, edge: 1, s:0, type: 'simple'},
+	    {id:8, p:12, edge: 1, s:0, type: 'simple'},
  	    {id:9, p:0,  edge: 21, s:0, type: 'simple'},
-	    {id:10, p:5,  edge: 21, s:0, type: 'simple'},
-	    {id:11, p:10, edge: 21, s:0, type: 'simple'},
-	    {id:12, p:15, edge: 21, s:0, type: 'simple'},
+	    {id:10, p:4,  edge: 21, s:0, type: 'simple'},
+	    {id:11, p:8, edge: 21, s:0, type: 'simple'},
+	    {id:12, p:12, edge: 21, s:0, type: 'simple'},
 	    {id:13, p:0,  edge: 22, s:0, type: 'simple'},
-	    {id:14, p:5,  edge: 22, s:0, type: 'simple'},
-	    {id:15, p:10, edge: 22, s:0, type: 'simple'},
-	    {id:16, p:15, edge: 22, s:0, type: 'simple'},
+	    {id:14, p:4,  edge: 22, s:0, type: 'simple'},
+	    {id:15, p:8, edge: 22, s:0, type: 'simple'},
+	    {id:16, p:12, edge: 22, s:0, type: 'simple'},
 	]);
 	
 	/*
@@ -714,7 +726,7 @@ $(function(){
 	
 	var AppView = ns.AppView = Backbone.View.extend({
 		
-		showCalculation: true,
+		showCalculation: false,
 		
 		collisionTest: true,
 		
@@ -961,10 +973,6 @@ $(function(){
 		requestAnimationFrame(animloop);
 		//setTimeout(animloop, 1000);
 	})();
-	
-	var gui = require('nw.gui');
-	gui.Window.get().showDevTools();
-	
 	
 	for (var n=0; n<window.cars.length; n++) {
 		var car = window.cars.get(n);
