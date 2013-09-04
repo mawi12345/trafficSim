@@ -68,6 +68,12 @@ $(function(){
 			return Math.round(this.getLength() / this.targetStepLength);
 		},
 		
+		getStepRotation: function(step) {
+			if (step < 0 || step > this.getSteps()) throw new Error('step '+step+' is not valid');
+			//constant
+			return Math.atan2(this.get('v2').getY()-this.get('v1').getY(), this.get('v2').getX()-this.get('v1').getX());
+		},
+		
 		getStepLength: function() {
 			return this.getLength() / this.getSteps();
 		},
@@ -216,11 +222,11 @@ $(function(){
 		
 		_position: 0,
 		
-		maxSpeed: 5,
+		maxSpeed: 8,
 				
 		dawdle: 0.15,
 		
-		acceleration: 0.05,
+		acceleration: 0.125,
 		
 		minDistance: 1,
 		
@@ -483,7 +489,7 @@ $(function(){
 	    {id:13, p:0,  edge: 22, s:0, type: 'simple'},
 	    {id:14, p:4,  edge: 22, s:0, type: 'simple'},
 	    {id:15, p:8, edge: 22, s:0, type: 'simple'},
-	    {id:16, p:12, edge: 22, s:0, type: 'simple'},
+	    {id:16, p:12, edge: 22, s:0, type: 'simple'}, 
 	]);
 	
 	/*
@@ -701,6 +707,7 @@ $(function(){
 			var vect = animation.path[i].getStepPosition(position);
 			this.shape.setX(vect.x);
 			this.shape.setY(vect.y);
+			this.shape.setRotation(animation.path[i].getStepRotation(position));
 			this.speedText.setText(animation.speed);
 		},
 		
