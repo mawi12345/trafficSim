@@ -128,11 +128,11 @@ $(function(){
 		
 	});
 	
-	var Car = ns.Car = Backbone.RelationalModel.extend({
+	var Obstacle = ns.Obstacle = Backbone.RelationalModel.extend({
 		
 		subModelTypes: {
-			'dummy': 'DummyCar',
-			'simple': 'SimpleCar'
+			'static': 'StaticObstacle',
+			'car': 'Car'
 		},
 		
 		relations: [
@@ -167,7 +167,6 @@ $(function(){
 		},
 		
 		getGateways: function() {
-			console.log('overwrite this method!');
 			return [];
 		},
 		
@@ -205,24 +204,24 @@ $(function(){
 		},
 		
 		getDistance: function(vertex) {
-			console.log('overwrite this method!');
 			return 0;
 		}
 		
 	});
 	
-	var DummyCar = ns.DummyCar = Car.extend({
+	var StaticObstacle = ns.StaticObstacle = Obstacle.extend({
+		
+		initialize: function() {
+			this.set(this.get('edge').getStepPosition(this.get('p')));
+		},
 		
 		calculate: function() {},
 		
-		move: function() {
-			var edge = this.get('edge');
-			this.set(edge.getStepPosition(this.get('p')));
-		}
+		move: function() {},
 		
 	});
 	
-	var SimpleCar = ns.SimpleCar = Car.extend({
+	var Car = ns.Car = Obstacle.extend({
 		
 		_path: [],
 		
@@ -451,9 +450,9 @@ $(function(){
 		
 	});
 	
-	var CarCollection = ns.CarCollection = Backbone.Collection.extend({
+	var ObstacleCollection = ns.CarCollection = Backbone.Collection.extend({
 		  		
-		model: Car
+		model: Obstacle
 		
 	});
 	
@@ -507,23 +506,25 @@ $(function(){
 	       {id:24, v1:20, v2:19}
 	]);
 	
-	window.cars = new CarCollection([
- 	    {id:1, p:0,  edge: 4, s:0, type: 'simple'},
-	    {id:2, p:4,  edge: 4, s:0, type: 'simple'},
-	    {id:3, p:8, edge: 4, s:0, type: 'simple'},
-	    {id:4, p:12, edge: 4, s:0, type: 'simple'},
-	    {id:5, p:0,  edge: 1, s:0, type: 'simple'},
-	    {id:6, p:4,  edge: 1, s:0, type: 'simple'},
-	    {id:7, p:8, edge: 1, s:0, type: 'simple'},
-	    {id:8, p:12, edge: 1, s:0, type: 'simple'},
- 	    {id:9, p:0,  edge: 21, s:0, type: 'simple'},
-	    {id:10, p:4,  edge: 21, s:0, type: 'simple'},
-	    {id:11, p:8, edge: 21, s:0, type: 'simple'},
-	    {id:12, p:12, edge: 21, s:0, type: 'simple'},
-	    {id:13, p:0,  edge: 22, s:0, type: 'simple'},
-	    {id:14, p:4,  edge: 22, s:0, type: 'simple'},
-	    {id:15, p:8, edge: 22, s:0, type: 'simple'},
-	    {id:16, p:12, edge: 22, s:0, type: 'simple'}, 
+	window.obstacles = new ObstacleCollection([
+	    {id:0, p:0,  edge: 3, s:0, type: 'static'},
+	                                 
+ 	    {id:1, p:0,  edge: 4, s:0, type: 'car'},
+	    {id:2, p:4,  edge: 4, s:0, type: 'car'},
+	    {id:3, p:8, edge: 4, s:0, type: 'car'},
+	    {id:4, p:12, edge: 4, s:0, type: 'car'},
+	    {id:5, p:0,  edge: 1, s:0, type: 'car'},
+	    {id:6, p:4,  edge: 1, s:0, type: 'car'},
+	    {id:7, p:8, edge: 1, s:0, type: 'car'},
+	    {id:8, p:12, edge: 1, s:0, type: 'car'},
+ 	    {id:9, p:0,  edge: 21, s:0, type: 'car'},
+	    {id:10, p:4,  edge: 21, s:0, type: 'car'},
+	    {id:11, p:8, edge: 21, s:0, type: 'car'},
+	    {id:12, p:12, edge: 21, s:0, type: 'car'},
+	    {id:13, p:0,  edge: 22, s:0, type: 'car'},
+	    {id:14, p:4,  edge: 22, s:0, type: 'car'},
+	    {id:15, p:8, edge: 22, s:0, type: 'car'},
+	    {id:16, p:12, edge: 22, s:0, type: 'car'}, 
 	]);
 	
 	/*
@@ -544,7 +545,7 @@ $(function(){
         {id:5, v1:4, v2:3, p: -1}
 	]);
 	
-	window.cars = new CarCollection([
+	window.obstacles = new ObstacleCollection([
 	    {id:0, p:0,  edge: 0, s:0, type: 'simple'},
 	    {id:1, p:5,  edge: 0, s:0, type: 'simple'},
 	    {id:2, p:10, edge: 0, s:0, type: 'simple'},
@@ -559,7 +560,7 @@ $(function(){
    	*(
    	*
 	/*
-	window.cars = new CarCollection([
+	window.obstacles = new ObstacleCollection([
  	    {id:0, p:0,  edge: 2, s:0, type: 'simple'},
  	    {id:1, p:8,  edge: 4, s:0, type: 'simple'}
  	    //{id:9, p:1,  edge: 3, s:0, type: 'dummy'}
@@ -699,7 +700,7 @@ $(function(){
 		        text: this.model.getId(),
 		        fontSize: 12,
 		        fontFamily: 'Calibri',
-		        fill: 'white'
+		        fill: 'black'
 			});
 			
 			this.speedText = new Kinetic.Text({
@@ -853,8 +854,8 @@ $(function(){
 		},
 		
 		addCars: function() {
-			window.cars.each(function(car){
-				this.addCar(car);
+			window.obstacles.each(function(obstacle){
+				this.addObstacle(obstacle);
 			}, this);    
 		},
 		
@@ -862,15 +863,15 @@ $(function(){
 		
 		needCalc: false,
 		
-		addCar: function(car) {
+		addObstacle: function(obstacle) {
 			
 			if (this.showCalculation) {
-				var carView = new CarView({model: car});
+				var carView = new CarView({model: obstacle});
 				this.listenTo(carView, 'dirty', function(){ this.dirtyCars = true;});
 				this.carLayer.add(carView.getShape());
 			}
 			
-			var carAnimationView = new CarAnimationView({model: car});
+			var carAnimationView = new CarAnimationView({model: obstacle});
 			this.listenTo(carAnimationView, 'dirty', function(){ this.dirtyCars = true;});
 			this.listenTo(carAnimationView, 'calc', function(){ this.needCalc = true;});
 			this.carLayer.add(carAnimationView.getShape());
@@ -938,19 +939,19 @@ $(function(){
 			
 			var lockRequests = [];
 			
-			window.cars.each(function(car){
-				car.resetPriority();
-				car.rendomize();
-				_.each(car.getGateways(), function(edge){ 
+			window.obstacles.each(function(obstacle){
+				obstacle.resetPriority();
+				obstacle.rendomize();
+				_.each(obstacle.getGateways(), function(edge){ 
 					if (lockRequests[edge.get('v2').getId()]) {
 						lockRequests[edge.get('v2').getId()].push({
-							'car': car,
+							'car': obstacle,
 							'edge': edge
 						});
 					} else {
 						lockRequests[edge.get('v2').getId()] = [{
 							'edge': edge,
-							'car': car
+							'car': obstacle
 						}];
 					}
 				});
@@ -970,27 +971,37 @@ $(function(){
 				//console.log('selecting car'+request.car.getId()+' for priority on vetertex'+request.edge.get('v2').getId()+' an gateway edge'+request.edge.getId());
 			}, this);
 			
-			window.cars.each(function(car){
-				car.move();
+			window.obstacles.each(function(obstacle){
+				obstacle.move();
 			});
 			
 			if (this.collisionTest) {
-				window.cars.each(function(car){
-					window.cars.each(function(other){
-						if (car.getId() == other.getId()) return;
+				window.obstacles.each(function(obstacle){
+					window.obstacles.each(function(other){
+						if (obstacle.getId() == other.getId()) return;
 						
-						if (Math.abs(car.getX()-other.getX()) < this.collisionDistance &&
-							Math.abs(car.getY()-other.getY()) < this.collisionDistance) {
-							console.log('car'+car.getId(), car);
+						if (Math.abs(obstacle.getX()-other.getX()) < this.collisionDistance &&
+							Math.abs(obstacle.getY()-other.getY()) < this.collisionDistance) {
+							console.log('car'+obstacle.getId(), obstacle);
 							console.log('car'+other.getId(), other);
-							console.log('Collision! car'+car.getId()+' with car'+other.getId());
-							throw new Error('Collision! car'+car.getId()+' with car'+other.getId());
+							console.log('Collision! car'+obstacle.getId()+' with car'+other.getId());
+							throw new Error('Collision! car'+obstacle.getId()+' with car'+other.getId());
 						}
 						
 					}, this);
 				}, this);
 			}
 			
+		},
+		
+		removeStaticObstacles: function() {
+			window.obstacles.each(function(obstacle) {
+				if (obstacle instanceof StaticObstacle) {
+					obstacle.get('edge').get('cars').remove(obstacle);
+					obstacle.set({x: 0, y: 0});
+					console.log('removing static', obstacle);
+				}
+			});
 		},
 		
 		openHelp: function() {
@@ -1015,39 +1026,11 @@ $(function(){
 		//setTimeout(animloop, 1000);
 	})();
 	
-	for (var n=0; n<window.cars.length; n++) {
-		var car = window.cars.get(n);
+	for (var n=0; n<window.obstacles.length; n++) {
+		var car = window.obstacles.get(n);
 		console.log('car'+n, car);
 		window['car'+n] = car;
 	};
 	
-	/*
-	(function calculate(){
-		var simulations = [];
-		window.cars.each(function(car){
-			car.calculate();
-			simulations.push(car.simulate());
-		});
-		
-		//console.log(simulations);
-		
-		_.each(simulations, function(simulation) {
-			_.each(simulations, function(other) {
-				if (simulation.car.getId() == other.car.getId()) return;
-				if (simulation.edge.getId() == other.edge.getId() &&
-					simulation.position == other.position &&
-					simulation.edge.getGivePriority()) {
-					console.log('GIVE');
-					simulation.car.givePriority();
-				}
-			});
-		});
-		
-		window.cars.each(function(car){
-			car.move();
-		});
-		setTimeout(calculate, 10);
-	})();
-	*/
 });
 
