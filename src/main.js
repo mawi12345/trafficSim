@@ -74,6 +74,12 @@ $(function(){
 			return Math.atan2(this.get('v2').getY()-this.get('v1').getY(), this.get('v2').getX()-this.get('v1').getX());
 		},
 		
+		getSpeedLimit: function() {
+			var limit = this.get('sl');
+			if (!limit) return 1e+100;
+			return limit;
+		},
+		
 		getStepLength: function() {
 			return this.getLength() / this.getSteps();
 		},
@@ -222,13 +228,20 @@ $(function(){
 		
 		_position: 0,
 		
+		// maximal speed
 		maxSpeed: 8,
-				
+			
+		// dawdle probability
 		dawdle: 0.15,
 		
+		// acceleration factor 
 		acceleration: 0.125,
 		
+		// minimal distance to obstacle 
 		minDistance: 1,
+		
+		// ignore speed limit ahead
+		brakeFactor: 0.4,
 		
 		step: 20,
 				
@@ -398,18 +411,39 @@ $(function(){
 			if (this.random - this.dawdle < 0) {
 				newSpeed -= this.acceleration*this.maxSpeed;
 			}
+			
+			//check the speed limit
+			_.each(this._path, function(edge){
+				var limit;
+				if (this.get('edge').getId() == edge.getId()) {
+					limit = edge.getSpeedLimit();
+				} else {
+					var distance = this.getDistance(edge.get('v1'));
+					var ignore = Math.floor(distance*this.brakeFactor/(this.acceleration*this.maxSpeed))*(this.acceleration*this.maxSpeed);
+					if (ignore < 0) throw new Error('algo error ignore: '+ignore);
+					limit = edge.getSpeedLimit() + ignore;
+					if (ignore > 0 && limit < newSpeed)
+						console.log('speed limit ahead! ignore: ' + ignore + ' limit:' + limit + ' edge.limit: ' + edge.getSpeedLimit() + ' distance: ' + distance);
+				}
+				if (limit < newSpeed) newSpeed = limit;
+			}, this);
+			
+			
 			if (newSpeed < 0) return 0;
 			return newSpeed;
 		},
 		
 		getDistance: function(vertex) {
 			
-			var distance = -this.getPosition();
+			var distanceV2 = -this.getPosition();
+			var distanceV1 = this.getPosition();
 			
 			for (var i=0; i<this._path.length; i++) {
 				var edge = this._path[i];
-				distance += edge.getSteps();
-				if (edge.get('v2').getId() == vertex.getId()) return distance;
+				if (edge.get('v1').getId() == vertex.getId()) return Math.abs(distanceV1);
+				distanceV1 -= edge.getSteps();
+				distanceV2 += edge.getSteps();
+				if (edge.get('v2').getId() == vertex.getId()) return distanceV2;
 			}
 			
 			throw new Error('getDistance vertex'+vertex.getId()+' not in path');
@@ -454,16 +488,16 @@ $(function(){
 	       {id:5, v1:8, v2:3},
 	       {id:6, v1:4, v2:10},
 	       {id:7, v1:6, v2:5},
-	       {id:8, v1:7, v2:6},
-	       {id:9, v1:8, v2:7},
-	       {id:10, v1:9, v2:8},
+	       {id:8, v1:7, v2:6, sl:2},
+	       {id:9, v1:8, v2:7, sl:2},
+	       {id:10, v1:9, v2:8, sl:2},
 	       {id:11, v1:10, v2:9, p:-1},
-	       {id:12, v1:6, v2:12},
-	       {id:13, v1:15, v2:9},
+	       {id:12, v1:6, v2:12, sl:2},
+	       {id:13, v1:15, v2:9, sl:2},
 	       {id:14, v1:11, v2:12, p:-1},
-	       {id:15, v1:12, v2:13},
-	       {id:16, v1:13, v2:14},
-	       {id:17, v1:14, v2:15},
+	       {id:15, v1:12, v2:13, sl:2},
+	       {id:16, v1:13, v2:14, sl:2},
+	       {id:17, v1:14, v2:15, sl:2},
 	       {id:18, v1:15, v2:16},
 	       {id:19, v1:17, v2:11},
 	       {id:20, v1:13, v2:18},
